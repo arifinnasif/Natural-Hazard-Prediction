@@ -13,6 +13,7 @@ def download_nc_files(url, download_folder):
     soup = BeautifulSoup(response.text, 'html.parser')
     links = soup.find_all('a', href=True)
 
+    links = links[950:]
     for link in links:
         href = link['href']
         if href.endswith('.nc'):
