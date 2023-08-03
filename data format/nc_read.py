@@ -21,8 +21,8 @@ lat_dim =int( (lat_max - lat_min) / 4 )
 lon_dim =int( (lon_max - lon_min) / 4 )
 
 dim = 50
-hours_to_read = 5
-files_per_hour = 180
+hours_to_read = 1000
+files_per_hour = 1
 N_ncfiles = hours_to_read * files_per_hour
 
 
