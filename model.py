@@ -118,5 +118,71 @@ class Mjolnir_01(nn.Module):
         return x
 
 
+class StepDeep(nn.Module):
+    def __init__(self):
+        super(StepDeep, self).__init__()
+        self.num_frames_truth = 1
+        self.num_frames = 6
+        self.fea_dim = 1
+
+        self.conv1 = nn.Sequential( 
+            nn.Conv3d(self.num_frames_truth, 128, kernel_size=(3,1,1), stride=1, padding=(1,0,0)),
+            nn.ReLU()
+        )
+
+        self.conv2 = nn.Sequential(
+            nn.Conv3d(128, 128, kernel_size=(1,3,3), stride=1, padding=(0,1,1)),
+            nn.ReLU()
+        )
+
+        self.conv3 = nn.Sequential(
+            nn.Conv3d(128, 256, kernel_size=(3,3,3), stride=1, padding=(1,1,1)),
+            nn.ReLU()
+        )
+
+        self.conv4 = nn.Sequential(
+            nn.Conv3d(256, 128, kernel_size=(5,1,1), stride=1, padding=(2,0,0)),
+            nn.ReLU()
+        )
+
+        self.conv5 = nn.Sequential(
+            nn.Conv3d(128, 128, kernel_size=(1,3,3), stride=1, padding=(0,1,1)),
+            nn.ReLU()
+        )
+
+        self.conv6 = nn.Sequential(
+            nn.Conv3d(128, 64, kernel_size=(3,3,3), stride=1, padding=(1,1,1)),
+            nn.ReLU()
+        )
+
+        self.conv2d_1 = nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=(7,7), stride=1, padding=(3,3)),
+            nn.ReLU()
+        )
+
+        self.conv2d_2 = nn.Conv2d(64, 1, kernel_size=(7,7), stride=1, padding=(3,3))
+        
+
+    
+    def forward(self, input_batch):
+        input_batch = input_batch.permute(0, 2, 1, 3, 4)
+        result = []
+        
+        output = self.conv1(input_batch)
+        output = self.conv2(output)
+        output = self.conv3(output)
+        output = self.conv4(output)
+        output = self.conv5(output)
+        output = self.conv6(output)
+        
+        for i in range(6):
+            x = output[:, :, i, :, :]
+            x = self.conv2d_1(x)
+            x = self.conv2d_2(x)
+            result.append(x)
+        
+        result = torch.stack(result, dim=2)
+        return result.permute(0, 2, 1, 3, 4)
+        
 
 
