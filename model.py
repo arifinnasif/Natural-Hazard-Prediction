@@ -112,7 +112,7 @@ class Mjolnir_01(nn.Module):
 
         x = x[:,:,:,:-1,:-1]
 
-        x = F.sigmoid(x)
+        # x = F.sigmoid(x)
 
         # print(x.shape)
         return x
@@ -165,6 +165,7 @@ class StepDeep(nn.Module):
 
     
     def forward(self, input_batch):
+        input_batch = input_batch[:,:,0:1,:,:]
         input_batch = input_batch.permute(0, 2, 1, 3, 4)
         result = []
         
@@ -174,16 +175,14 @@ class StepDeep(nn.Module):
         output = self.conv4(output)
         output = self.conv5(output)
         output = self.conv6(output)
-
+        
         output = output.permute(0, 2, 1, 3, 4)
-        output = output.view(-1, output.shape[2], 159, 159)
+        output = output.reshape(-1, output.shape[2], 159, 159)
         output = self.conv2d_1(output)
         output = self.conv2d_2(output)
-        output = output.view(-1, 6, output.shape[1], 159, 159)
+        output = output.reshape(-1, 6, output.shape[1], 159, 159)
 
-        return F.sigmoid(output)
-
-        output = output.view(-1, 64, 6, 159, 159)
+        return output
         
         for i in range(6):
             x = output[:, :, i, :, :]
@@ -192,7 +191,7 @@ class StepDeep(nn.Module):
             result.append(x)
         
         result = torch.stack(result, dim=2)
-        return result.permute(0, 2, 1, 3, 4)
+        return F.sigmoid(result.permute(0, 2, 1, 3, 4))
         
 
 

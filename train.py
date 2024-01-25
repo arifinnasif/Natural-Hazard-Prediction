@@ -12,15 +12,16 @@ def train():
         test_size = len(full_dataset) - train_size - val_size
         train_dataset, val_dataset, test_dataset = random_split(full_dataset, [train_size, val_size, test_size], generator=torch.Generator().manual_seed(42))
 
-        train_loader = DataLoader(dataset=train_dataset, batch_size=32, shuffle=True, num_workers=0)
-        val_loader = DataLoader(dataset=val_dataset, batch_size=32, shuffle=False, num_workers=0)
-        test_loader = DataLoader(dataset=test_dataset, batch_size=32, shuffle=False, num_workers=0)
+        train_loader = DataLoader(dataset=train_dataset, batch_size=44, shuffle=True, num_workers=0)
+        val_loader = DataLoader(dataset=val_dataset, batch_size=44, shuffle=False, num_workers=0)
+        test_loader = DataLoader(dataset=test_dataset, batch_size=44, shuffle=False, num_workers=0)
 
-        model = Mjolnir_01().to(torch.device("cuda"))
+        model = StepDeep().float().to(torch.device("cuda"))
 
         # loss function
         
-        criterion = nn.BCELoss()
+        criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(20))
+        #criterion = nn.BCELoss()
     
 
         # optimizer
@@ -33,12 +34,13 @@ def train():
         print('Beginning train!')
 
 
-        for epoch in range(50):
+        for epoch in range(100):
             for i, (X, y, idx) in enumerate(train_loader):
                 X = X.float().to(torch.device("cuda"))
                 y = y.float().to(torch.device("cuda"))
 
-                predicted_frames = model(X).to(torch.device("cuda"))
+                #predicted_frames = model(X).to(torch.device("cuda"))
+                predicted_frames = model(X)
 
 
                 # backward
