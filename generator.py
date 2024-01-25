@@ -29,8 +29,9 @@ class CustomDataset(Dataset):
             X = self.data_2022[(idx):(idx+self.past_hours),:,:,:]
             y = self.data_2022[(idx+self.past_hours):(idx+self.past_hours+self.future_hours),0:1,:,:]
         else:
-            X = self.data_2023[(idx-720-744-720-744):(idx-720-744-720-744+self.past_hours),:,:,:]
-            y = self.data_2023[(idx-720-744-720-744+self.past_hours):(idx-720-744-720-744+self.past_hours+self.future_hours),0:1,:,:]
+            idx = idx - (720+744+720+744 - self.past_hours - self.future_hours)
+            X = self.data_2023[(idx):(idx+self.past_hours),:,:,:]
+            y = self.data_2023[(idx+self.past_hours):(idx+self.past_hours+self.future_hours),0:1,:,:]
 
         return X, y, idx
 

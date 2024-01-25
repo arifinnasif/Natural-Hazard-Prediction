@@ -52,10 +52,10 @@ class Cal_params_epoch(object):
 
     def cal_batch(self, y_true, y_pred):
         y_true, y_pred = self._transform(y_true, y_pred)
-        n1 = torch.sum((y_pred > 0.5) & (y_true > 0.5))
-        n2 = torch.sum((y_pred > 0.5) & (y_true <= 0.5))
-        n3 = torch.sum((y_pred <= 0.5) & (y_true > 0.5))
-        n4 = torch.sum((y_pred <= 0.5) & (y_true <= 0.5))
+        n1 = torch.sum((y_pred > 0) & (y_true > 0))
+        n2 = torch.sum((y_pred > 0) & (y_true < 1))
+        n3 = torch.sum((y_pred < 1) & (y_true > 0))
+        n4 = torch.sum((y_pred < 1) & (y_true < 1))
         r = torch.true_divide((n1 + n2) * (n1 + n3), n1 + n2 + n3 + n4)
         pod = self._POD_(n1, n3)
         far = self._FAR_(n1, n2)
@@ -69,10 +69,10 @@ class Cal_params_epoch(object):
 
     def cal_batch_sum(self, y_true, y_pred):
         y_true, y_pred = self._transform_sum(y_true, y_pred)
-        n1 = torch.sum((y_pred > 0.5) & (y_true > 0.5))
-        n2 = torch.sum((y_pred > 0.5) & (y_true <= 0.5))
-        n3 = torch.sum((y_pred <= 0.5) & (y_true > 0.5))
-        n4 = torch.sum((y_pred <= 0.5) & (y_true <= 0.5))
+        n1 = torch.sum((y_pred > 0) & (y_true > 0))
+        n2 = torch.sum((y_pred > 0) & (y_true < 1))
+        n3 = torch.sum((y_pred < 1) & (y_true > 0))
+        n4 = torch.sum((y_pred < 1) & (y_true < 1))
         r = torch.true_divide((n1 + n2) * (n1 + n3), n1 + n2 + n3 + n4)
         pod = self._POD_(n1, n3)
         far = self._FAR_(n1, n2)

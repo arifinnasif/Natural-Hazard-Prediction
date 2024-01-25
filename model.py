@@ -174,6 +174,16 @@ class StepDeep(nn.Module):
         output = self.conv4(output)
         output = self.conv5(output)
         output = self.conv6(output)
+
+        output = output.permute(0, 2, 1, 3, 4)
+        output = output.view(-1, output.shape[2], 159, 159)
+        output = self.conv2d_1(output)
+        output = self.conv2d_2(output)
+        output = output.view(-1, 6, output.shape[1], 159, 159)
+
+        return F.sigmoid(output)
+
+        output = output.view(-1, 64, 6, 159, 159)
         
         for i in range(6):
             x = output[:, :, i, :, :]
