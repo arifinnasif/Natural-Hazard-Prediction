@@ -233,12 +233,12 @@ class Mjolnir_02(nn.Module):
         c_t = []
 
         for i in range(self.num_layers):
-            zeros = torch.zeros([batch_size, self.num_hidden[i], self.mn, self.mn])
+            zeros = torch.zeros([batch_size, self.num_hidden[i], self.mn, self.mn]).to(torch.device("cuda"))
             h_t.append(zeros)
             c_t.append(zeros)
 
 
-        memory = torch.zeros([batch_size, self.num_hidden[0], self.mn, self.mn])
+        memory = torch.zeros([batch_size, self.num_hidden[0], self.mn, self.mn]).to(torch.device("cuda"))
 
 
 

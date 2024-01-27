@@ -12,11 +12,11 @@ def train():
         test_size = len(full_dataset) - train_size - val_size
         train_dataset, val_dataset, test_dataset = random_split(full_dataset, [train_size, val_size, test_size], generator=torch.Generator().manual_seed(42))
 
-        train_loader = DataLoader(dataset=train_dataset, batch_size=44, shuffle=True, num_workers=0)
-        val_loader = DataLoader(dataset=val_dataset, batch_size=44, shuffle=False, num_workers=0)
-        test_loader = DataLoader(dataset=test_dataset, batch_size=44, shuffle=False, num_workers=0)
+        train_loader = DataLoader(dataset=train_dataset, batch_size=18, shuffle=True, num_workers=0)
+        val_loader = DataLoader(dataset=val_dataset, batch_size=18, shuffle=False, num_workers=0)
+        test_loader = DataLoader(dataset=test_dataset, batch_size=18, shuffle=False, num_workers=0)
 
-        model = Mjolnir_02().float().to(torch.device("cuda"))
+        model = Mjolnir_02(6, 8).float().to(torch.device("cuda"))
 
         # loss function
         
@@ -58,9 +58,10 @@ def train():
                 print('TRAIN INFO: epoch:{} ({}/{}) loss:{:.5f}'.format(epoch, i+1, len(train_loader), loss.item()))
                 del X
                 del y
+                del y_aux
                 del predicted_frames
 
-
+            
             val_sumets = model_eval_valdata.eval(val_loader, model, epoch)
             test_sumets = model_eval_testdata.eval(test_loader, model, epoch)
             # print(val_sumets, test_sumets)

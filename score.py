@@ -125,12 +125,11 @@ class Model_eval(object):
     def eval(self, dataloader, model, epoch):
 
         val_calparams_epoch = Cal_params_epoch()
-        for i, (X, y, idx) in enumerate(dataloader):
+        for i, (X, y, y_aux, idx) in enumerate(dataloader):
             X = X.float().to(torch.device("cuda"))
             y = y.float().to(torch.device("cuda"))
             # print("hi"+str(i))
-
-            predicted_frames = model(X)
+            predicted_frames, _ = model(X)
             # print(predicted_frames.shape)
 
             # output
@@ -140,6 +139,7 @@ class Model_eval(object):
             print(info)
             del X
             del y
+            del _
             del predicted_frames
         sumpod, sumfar, sumts, sumets = val_calparams_epoch.cal_epoch_sum()
         info = '`{}` VAL EPOCH INFO: epoch:{} \nsumPOD:{:.5f}  sumFAR:{:.5f}  sumTS:{:.5f}  sumETS:{:.5f}\n save model:{}\n'. \
