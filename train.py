@@ -16,11 +16,12 @@ def train():
         val_loader = DataLoader(dataset=val_dataset, batch_size=44, shuffle=False, num_workers=0)
         test_loader = DataLoader(dataset=test_dataset, batch_size=44, shuffle=False, num_workers=0)
 
-        model = StepDeep().float().to(torch.device("cuda"))
+        model = Mjolnir_02().float().to(torch.device("cuda"))
 
         # loss function
         
-        criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(20))
+        criterion1 = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(20))
+        criterion2 = nn.MSELoss()
         #criterion = nn.BCELoss()
     
 
@@ -35,18 +36,19 @@ def train():
 
 
         for epoch in range(100):
-            for i, (X, y, idx) in enumerate(train_loader):
+            for i, (X, y, y_aux, idx) in enumerate(train_loader):
                 X = X.float().to(torch.device("cuda"))
                 y = y.float().to(torch.device("cuda"))
+                y_aux = y_aux.float().to(torch.device("cuda"))
 
                 #predicted_frames = model(X).to(torch.device("cuda"))
-                predicted_frames = model(X)
+                predicted_frames, radar_frames = model(X)
 
 
                 # backward
                 optimizer.zero_grad()
             
-                loss = criterion(torch.flatten(predicted_frames), torch.flatten(y))
+                loss = criterion1(torch.flatten(predicted_frames), torch.flatten(y)) + criterion2(torch.flatten(radar_frames), torch.flatten(y_aux))
                 loss.backward()
 
                 # update weights

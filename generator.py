@@ -25,14 +25,17 @@ class CustomDataset(Dataset):
         return 2*(720+744+720+744 - self.past_hours - self.future_hours)
 
     def __getitem__(self, idx):
+        idx_old = idx
         if idx < 720+744+720+744 - self.past_hours - self.future_hours:
             X = self.data_2022[(idx):(idx+self.past_hours),:,:,:]
             y = self.data_2022[(idx+self.past_hours):(idx+self.past_hours+self.future_hours),0:1,:,:]
+            y_aux = self.data_2022[(idx+self.past_hours):(idx+self.past_hours+self.future_hours),6:7,:,:]
         else:
             idx = idx - (720+744+720+744 - self.past_hours - self.future_hours)
             X = self.data_2023[(idx):(idx+self.past_hours),:,:,:]
             y = self.data_2023[(idx+self.past_hours):(idx+self.past_hours+self.future_hours),0:1,:,:]
-        return X, y, idx
+            y_aux = self.data_2023[(idx+self.past_hours):(idx+self.past_hours+self.future_hours),6:7,:,:]
+        return X, y, y_aux, idx_old
 
 
 # full_dataset = CustomDataset()

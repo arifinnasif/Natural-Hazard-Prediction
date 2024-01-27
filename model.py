@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from layers.transformer import *
 from layers.positional_encoding import *
 from layers.st_lstm import *
+from layers.unet import *
 
 class Mjolnir_01(nn.Module):
     def __init__(self):
@@ -197,10 +198,11 @@ class Mjolnir_02(nn.Module):
             nn.ReLU(),
             nn.ConvTranspose2d(64, 64, kernel_size=5, stride=2, padding=2, output_padding=1),
             nn.ReLU(),
-            nn.Conv2d(64, 1, kernel_size=1, stride=1),
             # nn.ReLU(),
             # nn.Sigmoid()
         )
+
+        self.decoder_out = nn.Conv2d(64, 1, kernel_size=1, stride=1)
 
         self.cell_list = []
         self.decoder_cell_list = []
@@ -220,6 +222,8 @@ class Mjolnir_02(nn.Module):
 
         self.cell_list = nn.ModuleList(self.cell_list)
         self.decoder_cell_list = nn.ModuleList(self.decoder_cell_list)
+        self.unet = AttU_Net(1,1)
+        self.fusion = nn.Conv2d(2, 1, kernel_size=5, stride=1, padding=2)
 
 
     def forward(self, obs):
@@ -251,6 +255,7 @@ class Mjolnir_02(nn.Module):
             c_t[i] = self.encoder_c[i](c_t[i])
             
         out_list = []
+        out_list_radar = []
         last_frame = obs[:, -1, 0:1, :, :]
         
         for t in range(self.future_frames):
@@ -259,17 +264,23 @@ class Mjolnir_02(nn.Module):
             for i in range(1, self.num_layers):
                 h_t[i], c_t[i], memory = self.decoder_cell_list[i](h_t[i - 1], h_t[i], c_t[i], memory)
             x =  self.decoder_2(h_t[self.num_layers - 1])
+            radar_x = x[:,0:1,:,:] # pick the first channel as radar
+            out_list_radar.append(radar_x[:,:,:-1,:-1])
+            radar_x = self.unet(radar_x)
+            x = self.decoder_out(x)
+            x = self.fusion(torch.cat([x, radar_x], dim=1))
+
             x = x[:,:,:-1,:-1]
+
+            
+
             out_list.append(x)
             last_frame = F.sigmoid(x)
 
         # print(pre_frames.shape)
-        return torch.cat(out_list, dim=1).unsqueeze(2)
+        return torch.cat(out_list, dim=1).unsqueeze(2), torch.cat(out_list_radar, dim=1).unsqueeze(2)
 
 
-model = Mjolnir_02(6, 8)
-
-print(model(torch.randn(1, 6, 8, 159, 159)).shape)
 
 class StepDeep(nn.Module):
     def __init__(self):
