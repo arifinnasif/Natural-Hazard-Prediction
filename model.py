@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from layers.transformer import *
 from layers.positional_encoding import *
+from layers.st_lstm import *
 
 class Mjolnir_01(nn.Module):
     def __init__(self):
@@ -116,7 +117,159 @@ class Mjolnir_01(nn.Module):
 
         # print(x.shape)
         return x
+    
 
+class Mjolnir_02(nn.Module):
+    def __init__(self, obs_tra_frames, obs_channels, kickout=None):
+        super(Mjolnir_02, self).__init__()
+        self.obs_tra_frames = obs_tra_frames
+        self.future_frames = 6
+        self.obs_channels = obs_channels
+        self.kickout=kickout
+        self.num_layers = 2
+        mn = 40
+        self.mn = mn
+        self.num_hidden = [64, 64, 64, 64]
+        self.obs_encoder_module = nn.Sequential(
+            nn.Conv2d(obs_channels, 32, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
+            nn.Conv2d(32, 32, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(32, 64, kernel_size=5, stride=1, padding=2),
+            nn.LayerNorm([64, mn, mn], elementwise_affine=True)
+        )
+        
+        self.encoder_h = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(64, 64, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            nn.Sequential(
+                nn.Conv2d(64, 64, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+        ])
+        self.encoder_c = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(64, 64, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            nn.Sequential(
+                nn.Conv2d(64, 64, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+        ])
+
+        # self.decoder_ConvLSTM = ConvLSTM2D(8, 8, kernel_size=5, img_rowcol=mn)
+
+        self.decoder_1 = nn.Sequential(
+            nn.Conv2d(1, 8, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
+            nn.Conv2d(8, 8, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(8, 16, kernel_size=5, stride=1, padding=2),
+            nn.LayerNorm([16, mn, mn], elementwise_affine=True)
+        )
+        # self.decoder_ConvLSTM = ConvLSTM2D(16, 64, kernel_size=5, img_rowcol=mn) # first on is the output channels channels of decoder_1 and second one is the hidden channels
+
+        self.decoder_2 = nn.Sequential(
+            nn.ConvTranspose2d(64, 64, kernel_size=5, stride=2, padding=2, output_padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 64, kernel_size=5, stride=2, padding=2, output_padding=1),
+            nn.ReLU(),
+            nn.Conv2d(64, 1, kernel_size=1, stride=1),
+            # nn.ReLU(),
+            # nn.Sigmoid()
+        )
+
+        self.cell_list = []
+        self.decoder_cell_list = []
+
+        for i in range(self.num_layers):
+            self.cell_list.append(
+                SpatioTemporalLSTMCell(64, 64, mn, 5, 1, True)
+            )
+            if i == 0:
+              self.decoder_cell_list.append(
+                  SpatioTemporalLSTMCell(16, 64, mn, 5, 1, True)
+              )
+            else:
+              self.decoder_cell_list.append(
+                  SpatioTemporalLSTMCell(64, 64, mn, 5, 1, True)
+              )
+
+        self.cell_list = nn.ModuleList(self.cell_list)
+        self.decoder_cell_list = nn.ModuleList(self.decoder_cell_list)
+
+
+    def forward(self, obs):
+        batch_size = obs.shape[0]
+
+        h_t = []
+        c_t = []
+
+        for i in range(self.num_layers):
+            zeros = torch.zeros([batch_size, self.num_hidden[i], self.mn, self.mn])
+            h_t.append(zeros)
+            c_t.append(zeros)
+
+
+        memory = torch.zeros([batch_size, self.num_hidden[0], self.mn, self.mn])
+
+
+
+        for t in range(self.obs_tra_frames):
+            obs_encoder = self.obs_encoder_module(obs[:,t])
+            h_t[0], c_t[0], memory = self.cell_list[0](obs_encoder, h_t[0], c_t[0], memory)
+
+            for i in range(1, self.num_layers):
+                h_t[i], c_t[i], memory = self.cell_list[i](h_t[i - 1], h_t[i], c_t[i], memory)
+
+            # h, c = self.encoder_ConvLSTM(obs_encoder, h_t[self.num_layers-1], c_t[self.num_layers-1])
+        for i in range(self.num_layers):
+            h_t[i] = self.encoder_h[i](h_t[i])
+            c_t[i] = self.encoder_c[i](c_t[i])
+            
+        out_list = []
+        last_frame = obs[:, -1, 0:1, :, :]
+        
+        for t in range(self.future_frames):
+            x = self.decoder_1(last_frame)
+            h_t[0], c_t[0], memory = self.decoder_cell_list[0](x, h_t[0], c_t[0], memory)
+            for i in range(1, self.num_layers):
+                h_t[i], c_t[i], memory = self.decoder_cell_list[i](h_t[i - 1], h_t[i], c_t[i], memory)
+            x =  self.decoder_2(h_t[self.num_layers - 1])
+            x = x[:,:,:-1,:-1]
+            out_list.append(x)
+            last_frame = F.sigmoid(x)
+
+        # print(pre_frames.shape)
+        return torch.cat(out_list, dim=1).unsqueeze(2)
+
+
+model = Mjolnir_02(6, 8)
+
+print(model(torch.randn(1, 6, 8, 159, 159)).shape)
 
 class StepDeep(nn.Module):
     def __init__(self):
