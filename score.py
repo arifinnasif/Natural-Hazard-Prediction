@@ -1,6 +1,7 @@
 import torch
 import datetime
 import os
+import config as cfg
 
 class Cal_params_epoch(object):
     def __init__(self):
@@ -116,7 +117,7 @@ class Model_eval(object):
 
     def __del__(self):
         info = '`model name: {}`\nmaxPOD: {} maxPOD_epoch: {}\nminFAR: {} minFAR_epoch: {}\nmaxETS: {} maxETS_epoch: {}\n'\
-            .format("Mjolnir-01", self.maxPOD, self.maxPOD_epoch, self.minFAR, self.minFAR_epoch, self.maxETS, self.maxETS_epoch)
+            .format(cfg.model_class.__name__, self.maxPOD, self.maxPOD_epoch, self.minFAR, self.minFAR_epoch, self.maxETS, self.maxETS_epoch)
         print(info)
         if self.is_save_model and self.maxPOD_epoch != -1 and self.minFAR_epoch != -1 and self.maxETS_epoch != -1:
             with open(os.path.join( 'record.txt'), 'a') as f:
@@ -126,8 +127,8 @@ class Model_eval(object):
 
         val_calparams_epoch = Cal_params_epoch()
         for i, (X, y, y_aux, idx) in enumerate(dataloader):
-            X = X.float().to(torch.device("cuda"))
-            y = y.float().to(torch.device("cuda"))
+            X = X.float().to(cfg.device)
+            y = y.float().to(cfg.device)
             # print("hi"+str(i))
             predicted_frames, _ = model(X)
             # print(predicted_frames.shape)
@@ -143,7 +144,7 @@ class Model_eval(object):
             del predicted_frames
         sumpod, sumfar, sumts, sumets = val_calparams_epoch.cal_epoch_sum()
         info = '`{}` VAL EPOCH INFO: epoch:{} \nsumPOD:{:.5f}  sumFAR:{:.5f}  sumTS:{:.5f}  sumETS:{:.5f}\n save model:{}\n'. \
-            format("Mjolnir-01", epoch, sumpod, sumfar, sumts, sumets, self.is_save_model)
+            format(model.__class__.__name__, epoch, sumpod, sumfar, sumts, sumets, self.is_save_model)
         print(info)
         with open(os.path.join( 'record.txt'), 'a') as f:
             f.write(info + '\r\n')
@@ -164,7 +165,7 @@ class Model_eval(object):
         return sumets
 
     def save_model(self, model, name, epoch):
-        torch.save(model.state_dict(), os.path.join( '{}_{}.pkl'.format("LightNet", name)))
+        torch.save(model.state_dict(), os.path.join( '{}_{}.pkl'.format(model.__class__.__name__, name)))
         info = 'save model file: {} successfully! (epoch={})'.format(name, epoch)
         print(info)
         # with open(os.path.join(self.config_dict['RecordFileDir'], 'record.txt'), 'a') as f:

@@ -5,11 +5,12 @@ from layers.transformer import *
 from layers.positional_encoding import *
 from layers.st_lstm import *
 from layers.unet import *
+import config as cfg
 
 class Mjolnir_01(nn.Module):
     def __init__(self):
         super(Mjolnir_01, self).__init__()
-        self.num_frames_truth = 8
+        self.num_frames_truth = cfg.input_channels
 
         # Encoder
         self.encoder_conv2d_1 = nn.Sequential(
@@ -124,7 +125,7 @@ class Mjolnir_02(nn.Module):
     def __init__(self, obs_tra_frames, obs_channels, kickout=None):
         super(Mjolnir_02, self).__init__()
         self.obs_tra_frames = obs_tra_frames
-        self.future_frames = 6
+        self.future_frames = cfg.future_hours
         self.obs_channels = obs_channels
         self.kickout=kickout
         self.num_layers = 2

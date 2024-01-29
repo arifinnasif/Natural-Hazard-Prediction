@@ -2,6 +2,7 @@ from generator import *
 from score import *
 from model import *
 import argparse
+import config as cfg
 
 
 def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR_epoch = -1, maxETS = -0.5, maxETS_epoch = -1):
@@ -13,9 +14,9 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
         test_size = len(full_dataset) - train_size - val_size
         train_dataset, val_dataset, test_dataset = random_split(full_dataset, [train_size, val_size, test_size], generator=torch.Generator().manual_seed(42))
 
-        train_loader = DataLoader(dataset=train_dataset, batch_size=18, shuffle=True, num_workers=0)
-        val_loader = DataLoader(dataset=val_dataset, batch_size=18, shuffle=False, num_workers=0)
-        test_loader = DataLoader(dataset=test_dataset, batch_size=18, shuffle=False, num_workers=0)
+        train_loader = DataLoader(dataset=train_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=0)
+        val_loader = DataLoader(dataset=val_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=0)
+        test_loader = DataLoader(dataset=test_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=0)
 
         # model = Mjolnir_02(6, 8).float().to(torch.device("cuda"))
 
@@ -27,7 +28,7 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
     
 
         # optimizer
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+        optimizer = torch.optim.Adam(model.parameters(), lr=cfg.learning_rate)
 
         # eval
         if epoch == 0:
@@ -47,9 +48,9 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
 
         while epoch < 200:
             for i, (X, y, y_aux, idx) in enumerate(train_loader):
-                X = X.float().to(torch.device("cuda"))
-                y = y.float().to(torch.device("cuda"))
-                y_aux = y_aux.float().to(torch.device("cuda"))
+                X = X.float().to(cfg.device)
+                y = y.float().to(cfg.device)
+                y_aux = y_aux.float().to(cfg.device)
 
                 #predicted_frames = model(X).to(torch.device("cuda"))
                 predicted_frames, radar_frames = model(X)
@@ -58,7 +59,8 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
                 # backward
                 optimizer.zero_grad()
             
-                loss = 80*criterion1(torch.flatten(predicted_frames), torch.flatten(y)) + criterion2(torch.flatten(radar_frames), torch.flatten(y_aux))
+                loss = cfg.criterion1_weight*criterion1(torch.flatten(predicted_frames), torch.flatten(y)) \
+                        + cfg.criterion2_weight*criterion2(torch.flatten(radar_frames), torch.flatten(y_aux))
                 loss.backward()
 
                 # update weights
@@ -95,10 +97,10 @@ parser.add_argument('--resume', action='store_true', help='resume training')
 args = parser.parse_args()
 if args.resume:
     model_path = input("Enter model path: ")
-    model = Mjolnir_02(6, 8)
+    model = cfg.model_class(cfg.prev_hours, cfg.input_channels)
     model.load_state_dict(torch.load(model_path))
     model.float()
-    model.to(torch.device("cuda"))
+    model.to(cfg.device)
 
     last_epoch = int(input("Enter last epoch that was recorded: "))
 
@@ -111,5 +113,5 @@ if args.resume:
     
     train(model, epoch=last_epoch+1, maxPOD=maxPOD, maxPOD_epoch=maxPOD_epoch, minFAR=minFAR, minFAR_epoch=minFAR_epoch, maxETS=maxETS, maxETS_epoch=maxETS_epoch)
 else:
-    model = Mjolnir_02(6, 8).float().to(torch.device("cuda"))
+    model = cfg.model_class(cfg.prev_hours, cfg.input_channels).float().to(cfg.device)
     train(model)
