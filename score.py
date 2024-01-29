@@ -101,14 +101,14 @@ class Cal_params_epoch(object):
         return pod, far, ts, ets
 
 class Model_eval(object):
-    def __init__(self, is_save_model):
+    def __init__(self, is_save_model, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR_epoch = -1, maxETS = -0.5, maxETS_epoch = -1):
         self.is_save_model = is_save_model
-        self.maxPOD = -0.5
-        self.maxPOD_epoch = -1
-        self.minFAR = 1.1
-        self.minFAR_epoch = -1
-        self.maxETS = -0.5
-        self.maxETS_epoch = -1
+        self.maxPOD = maxPOD
+        self.maxPOD_epoch = maxPOD_epoch
+        self.minFAR = minFAR
+        self.minFAR_epoch = minFAR_epoch
+        self.maxETS = maxETS
+        self.maxETS_epoch = maxETS_epoch
         if self.is_save_model:
             with open(os.path.join('record.txt'), 'a') as f:
                 f.write(str(datetime.datetime.now()) + '\r\n')

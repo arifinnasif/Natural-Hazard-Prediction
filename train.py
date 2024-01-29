@@ -1,9 +1,10 @@
 from generator import *
 from score import *
 from model import *
+import argparse
 
 
-def train():
+def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR_epoch = -1, maxETS = -0.5, maxETS_epoch = -1):
     try:
         full_dataset = CustomDataset()
 
@@ -16,7 +17,7 @@ def train():
         val_loader = DataLoader(dataset=val_dataset, batch_size=18, shuffle=False, num_workers=0)
         test_loader = DataLoader(dataset=test_dataset, batch_size=18, shuffle=False, num_workers=0)
 
-        model = Mjolnir_02(6, 8).float().to(torch.device("cuda"))
+        # model = Mjolnir_02(6, 8).float().to(torch.device("cuda"))
 
         # loss function
         
@@ -29,13 +30,22 @@ def train():
         optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
         # eval
-        model_eval_valdata = Model_eval( is_save_model=True)
-        model_eval_testdata = Model_eval( is_save_model=False)
+        if epoch == 0:
+            model_eval_valdata = Model_eval( is_save_model=True)
+            model_eval_testdata = Model_eval( is_save_model=False)
+        else:
+            model_eval_valdata = Model_eval( is_save_model=True, maxPOD=maxPOD, maxPOD_epoch=maxPOD_epoch, minFAR=minFAR, minFAR_epoch=minFAR_epoch, maxETS=maxETS, maxETS_epoch=maxETS_epoch)
+            model_eval_testdata = Model_eval( is_save_model=False, maxPOD=maxPOD, maxPOD_epoch=maxPOD_epoch, minFAR=minFAR, minFAR_epoch=minFAR_epoch, maxETS=maxETS, maxETS_epoch=maxETS_epoch)
 
-        print('Beginning train!')
+
+        if epoch == 0:
+            print('Beginning train!')
+        else:
+            print('Resuming train!')
+        
 
 
-        for epoch in range(100):
+        while epoch < 200:
             for i, (X, y, y_aux, idx) in enumerate(train_loader):
                 X = X.float().to(torch.device("cuda"))
                 y = y.float().to(torch.device("cuda"))
@@ -48,7 +58,7 @@ def train():
                 # backward
                 optimizer.zero_grad()
             
-                loss = criterion1(torch.flatten(predicted_frames), torch.flatten(y)) + criterion2(torch.flatten(radar_frames), torch.flatten(y_aux))
+                loss = 80*criterion1(torch.flatten(predicted_frames), torch.flatten(y)) + criterion2(torch.flatten(radar_frames), torch.flatten(y_aux))
                 loss.backward()
 
                 # update weights
@@ -62,13 +72,44 @@ def train():
                 del predicted_frames
 
             
-            val_sumets = model_eval_valdata.eval(val_loader, model, epoch)
-            test_sumets = model_eval_testdata.eval(test_loader, model, epoch)
+            model_eval_valdata.eval(val_loader, model, epoch)
+            model_eval_testdata.eval(test_loader, model, epoch)
             # print(val_sumets, test_sumets)
+
+            epoch += 1
 
     except Exception as e:
         print(e)
         del model
 
 
-train()
+parser = argparse.ArgumentParser(
+                    prog='Mjolnir',
+                    description='What the program does',
+                    epilog='Text at the bottom of help')
+
+# --resume 
+# if --resume flag is given print resume or else do nothing
+parser.add_argument('--resume', action='store_true', help='resume training')
+
+args = parser.parse_args()
+if args.resume:
+    model_path = input("Enter model path: ")
+    model = Mjolnir_02(6, 8)
+    model.load_state_dict(torch.load(model_path))
+    model.float()
+    model.to(torch.device("cuda"))
+
+    last_epoch = int(input("Enter last epoch that was recorded: "))
+
+    maxPOD = float(input("Enter maxPOD: "))
+    maxPOD_epoch = int(input("Enter maxPOD_epoch: "))
+    minFAR = float(input("Enter minFAR: "))
+    minFAR_epoch = int(input("Enter minFAR_epoch: "))
+    maxETS = float(input("Enter maxETS: "))
+    maxETS_epoch = int(input("Enter maxETS_epoch: "))
+    
+    train(model, epoch=last_epoch+1, maxPOD=maxPOD, maxPOD_epoch=maxPOD_epoch, minFAR=minFAR, minFAR_epoch=minFAR_epoch, maxETS=maxETS, maxETS_epoch=maxETS_epoch)
+else:
+    model = Mjolnir_02(6, 8).float().to(torch.device("cuda"))
+    train(model)
