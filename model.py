@@ -360,7 +360,7 @@ class StepDeep(nn.Module):
         
 
 
-class LightNet(nn.Module):
+class LightNet_O(nn.Module):
     def __init__(self, obs_tra_frames, obs_channels):
         super(LightNet, self).__init__()
         self.obs_tra_frames = obs_tra_frames
