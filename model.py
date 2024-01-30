@@ -5,12 +5,12 @@ from layers.transformer import *
 from layers.positional_encoding import *
 from layers.st_lstm import *
 from layers.unet import *
-import config as cfg
+from layers.conv_lstm import *
 
 class Mjolnir_01(nn.Module):
     def __init__(self):
         super(Mjolnir_01, self).__init__()
-        self.num_frames_truth = cfg.input_channels
+        self.num_frames_truth = 8
 
         # Encoder
         self.encoder_conv2d_1 = nn.Sequential(
@@ -125,7 +125,7 @@ class Mjolnir_02(nn.Module):
     def __init__(self, obs_tra_frames, obs_channels, kickout=None):
         super(Mjolnir_02, self).__init__()
         self.obs_tra_frames = obs_tra_frames
-        self.future_frames = cfg.future_hours
+        self.future_frames = 6
         self.obs_channels = obs_channels
         self.kickout=kickout
         self.num_layers = 2
@@ -359,4 +359,72 @@ class StepDeep(nn.Module):
         return F.sigmoid(result.permute(0, 2, 1, 3, 4))
         
 
+
+class LightNet(nn.Module):
+    def __init__(self, obs_tra_frames, obs_channels):
+        super(LightNet, self).__init__()
+        self.obs_tra_frames = obs_tra_frames
+        self.future_frames = 6
+        self.obs_channels=obs_channels
+        
+        self.obs_encoder_module = nn.Sequential(
+            nn.Conv2d(1, 4, kernel_size=7, stride=2, padding=3),
+            nn.ReLU(),
+        ) # (bs, 4, 80, 80)
+
+        self.encoder_ConvLSTM = ConvLSTM2D(4, 8, kernel_size=5, img_rowcol=80)
+
+        self.encoder_h = nn.Sequential(
+            nn.Conv2d(8, 64, kernel_size=1, stride=1),
+            nn.ReLU(),
+        )
+        self.encoder_c = nn.Sequential(
+            nn.Conv2d(8, 64, kernel_size=1, stride=1),
+            nn.ReLU(),
+        )
+
+        self.decoder_1 = nn.Sequential(
+            nn.Conv2d(1, 4, kernel_size=7, stride=2, padding=3),
+            nn.ReLU(),
+        ) # (bs, 4, 80, 80)
+
+        self.decoder_ConvLSTM = ConvLSTM2D(4, 64, kernel_size=5, img_rowcol=80) # first on is the output channels channels of decoder_1 and second one is the hidden channels
+
+        self.decoder_2 = nn.Sequential(
+            nn.ConvTranspose2d(64, 64, kernel_size=7, stride=2, padding=3),
+            nn.ReLU(),
+            nn.Conv2d(64, 1, kernel_size=1, stride=1),
+            
+        )
+
+
+    def forward(self, obs):
+        batch_size = obs.shape[0]
+
+        obs=obs[:,:,0:1]
+
+
+        h = torch.zeros([batch_size, 8, 80, 80], dtype=torch.float32).to(obs.device)
+        c = torch.zeros([batch_size, 8, 80, 80], dtype=torch.float32).to(obs.device)
+
+
+        for t in range(self.obs_tra_frames):
+            obs_encoder = self.obs_encoder_module(obs[:,t,0:1]) # (bs, 4, 80, 80)
+            h, c = self.encoder_ConvLSTM(obs_encoder, h, c) # (bs, 8, 80, 80), (bs, 8, 80, 80)
+        h = self.encoder_h(h) # (bs, 64, 80, 80)
+        c = self.encoder_c(c) # (bs, 64, 80, 80)
+
+
+        last_frame = obs[:, -1, 0:1]
+
+        out_list = []
+
+        for t in range(self.future_frames):
+            x = self.decoder_1(last_frame) # (bs, 4, 80, 80)
+            h, c = self.decoder_ConvLSTM(x, h, c) # (bs, 8, 80, 80), (bs, 8, 80, 80)
+            x =  self.decoder_2(c) # (bs, 1, 159, 159)
+            out_list.append(x)
+            last_frame = F.sigmoid(x)
+
+        return torch.cat(out_list, dim=1).unsqueeze(2)
 
