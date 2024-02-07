@@ -362,7 +362,7 @@ class StepDeep(nn.Module):
 
 class LightNet_O(nn.Module):
     def __init__(self, obs_tra_frames, obs_channels):
-        super(LightNet, self).__init__()
+        super(LightNet_O, self).__init__()
         self.obs_tra_frames = obs_tra_frames
         self.future_frames = 6
         self.obs_channels=obs_channels
@@ -428,3 +428,7 @@ class LightNet_O(nn.Module):
 
         return torch.cat(out_list, dim=1).unsqueeze(2)
 
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+print(count_parameters(LightNet_O(6, 8)))
