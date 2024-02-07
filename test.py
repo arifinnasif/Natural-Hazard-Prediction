@@ -69,7 +69,7 @@ print('POD:{:.5f}  FAR:{:.5f}  TS:{:.5f}  ETS:{:.5f}'.format(pod, far, ts, ets))
 
 # spatio-only metrics
 print("Spatio-only metrics")
-print('TP:{:09d}  FP:{:09d} \FN:{:09d}  TN:{:09d}'.format(val_calparams_epoch.n1sum, val_calparams_epoch.n2sum, val_calparams_epoch.n3sum, val_calparams_epoch.n4sum))
+print('TP:{:09d}  FP:{:09d}\nFN:{:09d}  TN:{:09d}'.format(val_calparams_epoch.n1sum, val_calparams_epoch.n2sum, val_calparams_epoch.n3sum, val_calparams_epoch.n4sum))
 print('sumPOD:{:.5f}  sumFAR:{:.5f}  sumTS:{:.5f}  sumETS:{:.5f}'.format(sumpod, sumfar, sumts, sumets))
 
 
