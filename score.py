@@ -117,7 +117,7 @@ class Model_eval(object):
 
     def __del__(self):
         info = '`model name: {}`\nmaxPOD: {} maxPOD_epoch: {}\nminFAR: {} minFAR_epoch: {}\nmaxETS: {} maxETS_epoch: {}\n'\
-            .format(cfg.model_class.__name__, self.maxPOD, self.maxPOD_epoch, self.minFAR, self.minFAR_epoch, self.maxETS, self.maxETS_epoch)
+            .format(cfg.train_model_class.__name__, self.maxPOD, self.maxPOD_epoch, self.minFAR, self.minFAR_epoch, self.maxETS, self.maxETS_epoch)
         print(info)
         if self.is_save_model and self.maxPOD_epoch != -1 and self.minFAR_epoch != -1 and self.maxETS_epoch != -1:
             with open(os.path.join( 'record.txt'), 'a') as f:

@@ -46,7 +46,7 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
         
 
 
-        while epoch < 200:
+        while epoch < cfg.epochs:
             for i, (X, y, y_aux, idx) in enumerate(train_loader):
                 X = X.float().to(cfg.device)
                 y = y.float().to(cfg.device)
@@ -97,7 +97,7 @@ parser.add_argument('--resume', action='store_true', help='resume training')
 args = parser.parse_args()
 if args.resume:
     model_path = input("Enter model path: ")
-    model = cfg.model_class(cfg.prev_hours, cfg.input_channels)
+    model = cfg.train_model_class(cfg.prev_hours, cfg.input_channels)
     model.load_state_dict(torch.load(model_path))
     model.float()
     model.to(cfg.device)
@@ -113,5 +113,5 @@ if args.resume:
     
     train(model, epoch=last_epoch+1, maxPOD=maxPOD, maxPOD_epoch=maxPOD_epoch, minFAR=minFAR, minFAR_epoch=minFAR_epoch, maxETS=maxETS, maxETS_epoch=maxETS_epoch)
 else:
-    model = cfg.model_class(cfg.prev_hours, cfg.input_channels).float().to(cfg.device)
+    model = cfg.train_model_class(cfg.prev_hours, cfg.input_channels).float().to(cfg.device)
     train(model)
