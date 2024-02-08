@@ -4,19 +4,16 @@ from model import *
 import argparse
 import config as cfg
 
+# set random seed
+torch.manual_seed(42)
+
+
 
 def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR_epoch = -1, maxETS = -0.5, maxETS_epoch = -1):
     try:
-        full_dataset = CustomDataset()
-
-        train_size = int(0.7 * len(full_dataset))
-        val_size = int(0.2 * len(full_dataset))
-        test_size = len(full_dataset) - train_size - val_size
-        train_dataset, val_dataset, test_dataset = random_split(full_dataset, [train_size, val_size, test_size], generator=torch.Generator().manual_seed(42))
-
-        train_loader = DataLoader(dataset=train_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=0)
-        val_loader = DataLoader(dataset=val_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=0)
-        test_loader = DataLoader(dataset=test_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=0)
+        train_loader = get_train_loader()
+        val_loader = get_val_loader()
+        test_loader = get_test_loader()
 
         # model = Mjolnir_02(6, 8).float().to(torch.device("cuda"))
 
