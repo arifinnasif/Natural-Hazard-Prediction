@@ -48,9 +48,10 @@ class CustomDataset(Dataset):
     
 class TrainDataset(Dataset):
     def __init__(self):
+        self.data_2022 = np.load("dataset/total_data_2022.npy")
         self.data_2023 = np.load("dataset/total_data_2023.npy")
-        self.data_2023 = self.data_2023[0:720+744+720,:,:,:]  # first 3 month of 2023
-        self.total_hours = self.data_2023.shape[0]
+        self.data_2023 = self.data_2023[0:720+744,:,:,:]  # first 2 month of 2023
+        self.total_hours = self.data_2022.shape[0] + self.data_2023.shape[0]
         self.feature_count = self.data_2023.shape[1]
         self.dim = self.data_2023.shape[2]
         self.past_hours = 6
@@ -59,19 +60,26 @@ class TrainDataset(Dataset):
         # self.data = np.random.rand(self.total_hours, self.feature_count, self.dim, self.dim)
 
     def __len__(self):
-        return self.total_hours - self.past_hours - self.future_hours + 1
+        return (self.data_2022.shape[0] - self.past_hours - self.future_hours + 1) + (self.data_2023.shape[0] - self.past_hours - self.future_hours + 1)
 
     def __getitem__(self, idx):
-        X = self.data_2023[(idx):(idx+self.past_hours),:,:,:]
-        y = self.data_2023[(idx+self.past_hours):(idx+self.past_hours+self.future_hours),0:1,:,:]
-        y_aux = self.data_2023[(idx+self.past_hours):(idx+self.past_hours+self.future_hours),6:7,:,:]
-        return X, y, y_aux, idx
+        idx_old = idx
+        if idx < 720+744+720+744 - self.past_hours - self.future_hours + 1:
+            X = self.data_2022[(idx):(idx+self.past_hours),:,:,:]
+            y = self.data_2022[(idx+self.past_hours):(idx+self.past_hours+self.future_hours),0:1,:,:]
+            y_aux = self.data_2022[(idx+self.past_hours):(idx+self.past_hours+self.future_hours),6:7,:,:]
+        else:
+            idx = idx - (720+744+720+744 - self.past_hours - self.future_hours + 1)
+            X = self.data_2023[(idx):(idx+self.past_hours),:,:,:]
+            y = self.data_2023[(idx+self.past_hours):(idx+self.past_hours+self.future_hours),0:1,:,:]
+            y_aux = self.data_2023[(idx+self.past_hours):(idx+self.past_hours+self.future_hours),6:7,:,:]
+        return X, y, y_aux, idx_old
 
 
 class ValidationDataset(Dataset):
     def __init__(self):
         self.data_2023 = np.load("dataset/total_data_2023.npy")
-        self.data_2023 = self.data_2023[720+744+720:720+744+720+744//2,:,:,:]  # first half of last month of 2023
+        self.data_2023 = self.data_2023[720+744:720+744+720,:,:,:]  # third month of 2023
         self.total_hours = self.data_2023.shape[0]
         self.feature_count = self.data_2023.shape[1]
         self.dim = self.data_2023.shape[2]
@@ -93,7 +101,7 @@ class ValidationDataset(Dataset):
 class TestDataset(Dataset):
     def __init__(self):
         self.data_2023 = np.load("dataset/total_data_2023.npy")
-        self.data_2023 = self.data_2023[720+744+720+744//2:,:,:,:]  # last half of last month of 2023
+        self.data_2023 = self.data_2023[720+744+720:,:,:,:]  # last month of 2023
         self.total_hours = self.data_2023.shape[0]
         self.feature_count = self.data_2023.shape[1]
         self.dim = self.data_2023.shape[2]
