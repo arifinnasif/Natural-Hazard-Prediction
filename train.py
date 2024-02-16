@@ -4,8 +4,6 @@ from model import *
 import argparse
 import config as cfg
 
-# set random seed
-torch.manual_seed(42)
 
 
 
