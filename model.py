@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from layers.transformer import *
 from layers.positional_encoding import *
+from layers.st_lstm import *
+from layers.unet import *
+from layers.conv_lstm import *
 
 class Mjolnir_01(nn.Module):
     def __init__(self):
@@ -112,10 +115,172 @@ class Mjolnir_01(nn.Module):
 
         x = x[:,:,:,:-1,:-1]
 
-        x = F.sigmoid(x)
+        # x = F.sigmoid(x)
 
         # print(x.shape)
         return x
+    
+
+class Mjolnir_02(nn.Module):
+    def __init__(self, obs_tra_frames, obs_channels, kickout=None):
+        super(Mjolnir_02, self).__init__()
+        self.obs_tra_frames = obs_tra_frames
+        self.future_frames = 6
+        self.obs_channels = obs_channels
+        self.kickout=kickout
+        self.num_layers = 2
+        mn = 40
+        self.mn = mn
+        self.num_hidden = [64, 64, 64, 64]
+        self.obs_encoder_module = nn.Sequential(
+            nn.Conv2d(obs_channels, 32, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
+            nn.Conv2d(32, 32, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(32, 64, kernel_size=5, stride=1, padding=2),
+            nn.LayerNorm([64, mn, mn], elementwise_affine=True)
+        )
+        
+        self.encoder_h = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(64, 64, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            nn.Sequential(
+                nn.Conv2d(64, 64, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+        ])
+        self.encoder_c = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(64, 64, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            nn.Sequential(
+                nn.Conv2d(64, 64, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+        ])
+
+        # self.decoder_ConvLSTM = ConvLSTM2D(8, 8, kernel_size=5, img_rowcol=mn)
+
+        self.decoder_1 = nn.Sequential(
+            nn.Conv2d(1, 8, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
+            nn.Conv2d(8, 8, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(8, 16, kernel_size=5, stride=1, padding=2),
+            nn.LayerNorm([16, mn, mn], elementwise_affine=True)
+        )
+        # self.decoder_ConvLSTM = ConvLSTM2D(16, 64, kernel_size=5, img_rowcol=mn) # first on is the output channels channels of decoder_1 and second one is the hidden channels
+
+        self.decoder_2 = nn.Sequential(
+            nn.ConvTranspose2d(64, 64, kernel_size=5, stride=2, padding=2, output_padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 64, kernel_size=5, stride=2, padding=2, output_padding=1),
+            nn.ReLU(),
+            # nn.ReLU(),
+            # nn.Sigmoid()
+        )
+
+        self.decoder_out = nn.Conv2d(64, 1, kernel_size=1, stride=1)
+
+        self.cell_list = []
+        self.decoder_cell_list = []
+
+        for i in range(self.num_layers):
+            self.cell_list.append(
+                SpatioTemporalLSTMCell(64, 64, mn, 5, 1, True)
+            )
+            if i == 0:
+              self.decoder_cell_list.append(
+                  SpatioTemporalLSTMCell(16, 64, mn, 5, 1, True)
+              )
+            else:
+              self.decoder_cell_list.append(
+                  SpatioTemporalLSTMCell(64, 64, mn, 5, 1, True)
+              )
+
+        self.cell_list = nn.ModuleList(self.cell_list)
+        self.decoder_cell_list = nn.ModuleList(self.decoder_cell_list)
+        self.unet = AttU_Net(1,1)
+        self.fusion = nn.Conv2d(2, 1, kernel_size=5, stride=1, padding=2)
+
+
+    def forward(self, obs):
+        batch_size = obs.shape[0]
+
+        h_t = []
+        c_t = []
+
+        for i in range(self.num_layers):
+            zeros = torch.zeros([batch_size, self.num_hidden[i], self.mn, self.mn]).to(torch.device("cuda"))
+            h_t.append(zeros)
+            c_t.append(zeros)
+
+
+        memory = torch.zeros([batch_size, self.num_hidden[0], self.mn, self.mn]).to(torch.device("cuda"))
+
+
+
+        for t in range(self.obs_tra_frames):
+            obs_encoder = self.obs_encoder_module(obs[:,t])
+            h_t[0], c_t[0], memory = self.cell_list[0](obs_encoder, h_t[0], c_t[0], memory)
+
+            for i in range(1, self.num_layers):
+                h_t[i], c_t[i], memory = self.cell_list[i](h_t[i - 1], h_t[i], c_t[i], memory)
+
+            # h, c = self.encoder_ConvLSTM(obs_encoder, h_t[self.num_layers-1], c_t[self.num_layers-1])
+        for i in range(self.num_layers):
+            h_t[i] = self.encoder_h[i](h_t[i])
+            c_t[i] = self.encoder_c[i](c_t[i])
+            
+        out_list = []
+        out_list_radar = []
+        last_frame = obs[:, -1, 0:1, :, :]
+        
+        for t in range(self.future_frames):
+            x = self.decoder_1(last_frame)
+            h_t[0], c_t[0], memory = self.decoder_cell_list[0](x, h_t[0], c_t[0], memory)
+            for i in range(1, self.num_layers):
+                h_t[i], c_t[i], memory = self.decoder_cell_list[i](h_t[i - 1], h_t[i], c_t[i], memory)
+            x =  self.decoder_2(h_t[self.num_layers - 1])
+            radar_x = x[:,0:1,:,:] # pick the first channel as radar
+            out_list_radar.append(radar_x[:,:,:-1,:-1])
+            radar_x = self.unet(radar_x)
+            x = self.decoder_out(x)
+            x = self.fusion(torch.cat([x, radar_x], dim=1))
+
+            x = x[:,:,:-1,:-1]
+
+            
+
+            out_list.append(x)
+            last_frame = F.sigmoid(x)
+
+        # print(pre_frames.shape)
+        return torch.cat(out_list, dim=1).unsqueeze(2), torch.cat(out_list_radar, dim=1).unsqueeze(2)
+
 
 
 class StepDeep(nn.Module):
@@ -165,6 +330,7 @@ class StepDeep(nn.Module):
 
     
     def forward(self, input_batch):
+        input_batch = input_batch[:,:,0:1,:,:]
         input_batch = input_batch.permute(0, 2, 1, 3, 4)
         result = []
         
@@ -175,6 +341,14 @@ class StepDeep(nn.Module):
         output = self.conv5(output)
         output = self.conv6(output)
         
+        output = output.permute(0, 2, 1, 3, 4)
+        output = output.reshape(-1, output.shape[2], 159, 159)
+        output = self.conv2d_1(output)
+        output = self.conv2d_2(output)
+        output = output.reshape(-1, 6, output.shape[1], 159, 159)
+
+        return output
+        
         for i in range(6):
             x = output[:, :, i, :, :]
             x = self.conv2d_1(x)
@@ -182,7 +356,412 @@ class StepDeep(nn.Module):
             result.append(x)
         
         result = torch.stack(result, dim=2)
-        return result.permute(0, 2, 1, 3, 4)
+        return F.sigmoid(result.permute(0, 2, 1, 3, 4))
         
 
 
+class LightNet_O(nn.Module):
+    def __init__(self, obs_tra_frames, obs_channels):
+        super(LightNet_O, self).__init__()
+        self.obs_tra_frames = obs_tra_frames
+        self.future_frames = 6
+        self.obs_channels=obs_channels
+        
+        self.obs_encoder_module = nn.Sequential(
+            nn.Conv2d(1, 4, kernel_size=7, stride=2, padding=3),
+            nn.ReLU(),
+        ) # (bs, 4, 80, 80)
+
+        self.encoder_ConvLSTM = ConvLSTM2D(4, 8, kernel_size=5, img_rowcol=80)
+
+        self.encoder_h = nn.Sequential(
+            nn.Conv2d(8, 64, kernel_size=1, stride=1),
+            nn.ReLU(),
+        )
+        self.encoder_c = nn.Sequential(
+            nn.Conv2d(8, 64, kernel_size=1, stride=1),
+            nn.ReLU(),
+        )
+
+        self.decoder_1 = nn.Sequential(
+            nn.Conv2d(1, 4, kernel_size=7, stride=2, padding=3),
+            nn.ReLU(),
+        ) # (bs, 4, 80, 80)
+
+        self.decoder_ConvLSTM = ConvLSTM2D(4, 64, kernel_size=5, img_rowcol=80) # first on is the output channels channels of decoder_1 and second one is the hidden channels
+
+        self.decoder_2 = nn.Sequential(
+            nn.ConvTranspose2d(64, 64, kernel_size=7, stride=2, padding=3),
+            nn.ReLU(),
+            nn.Conv2d(64, 1, kernel_size=1, stride=1),
+            
+        )
+
+
+    def forward(self, obs):
+        batch_size = obs.shape[0]
+
+        obs=obs[:,:,0:1]
+
+
+        h = torch.zeros([batch_size, 8, 80, 80], dtype=torch.float32).to(obs.device)
+        c = torch.zeros([batch_size, 8, 80, 80], dtype=torch.float32).to(obs.device)
+
+
+        for t in range(self.obs_tra_frames):
+            obs_encoder = self.obs_encoder_module(obs[:,t,0:1]) # (bs, 4, 80, 80)
+            h, c = self.encoder_ConvLSTM(obs_encoder, h, c) # (bs, 8, 80, 80), (bs, 8, 80, 80)
+        h = self.encoder_h(h) # (bs, 64, 80, 80)
+        c = self.encoder_c(c) # (bs, 64, 80, 80)
+
+
+        last_frame = obs[:, -1, 0:1]
+
+        out_list = []
+
+        for t in range(self.future_frames):
+            x = self.decoder_1(last_frame) # (bs, 4, 80, 80)
+            h, c = self.decoder_ConvLSTM(x, h, c) # (bs, 8, 80, 80), (bs, 8, 80, 80)
+            x =  self.decoder_2(c) # (bs, 1, 159, 159)
+            out_list.append(x)
+            last_frame = F.sigmoid(x)
+
+        return torch.cat(out_list, dim=1).unsqueeze(2)
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+
+class Mjolnir_03(nn.Module):
+    def __init__(self, obs_tra_frames, obs_channels, kickout=None):
+        super(Mjolnir_03, self).__init__()
+        self.obs_tra_frames = obs_tra_frames
+        self.future_frames = 6
+        self.obs_channels = obs_channels
+        self.kickout=kickout
+        self.num_layers = 2
+        mn = 40
+        self.mn = mn
+        self.num_hidden = [32, 32, 32, 32]
+        self.obs_encoder_module = nn.Sequential(
+            nn.Conv2d(obs_channels, 16, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
+            nn.Conv2d(16, 16, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(16, 32, kernel_size=5, stride=1, padding=2),
+            nn.LayerNorm([32, mn, mn], elementwise_affine=True)
+        )
+        
+        self.encoder_h = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(32, 32, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            nn.Sequential(
+                nn.Conv2d(32, 32, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+        ])
+        self.encoder_c = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(32, 32, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            nn.Sequential(
+                nn.Conv2d(32, 32, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+        ])
+
+        # self.decoder_ConvLSTM = ConvLSTM2D(8, 8, kernel_size=5, img_rowcol=mn)
+
+        self.decoder_1 = nn.Sequential(
+            nn.Conv2d(1, 8, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
+            nn.Conv2d(8, 8, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(8, 16, kernel_size=5, stride=1, padding=2),
+            nn.LayerNorm([16, mn, mn], elementwise_affine=True)
+        )
+        # self.decoder_ConvLSTM = ConvLSTM2D(16, 64, kernel_size=5, img_rowcol=mn) # first on is the output channels channels of decoder_1 and second one is the hidden channels
+
+        self.decoder_2 = nn.Sequential(
+            nn.ConvTranspose2d(32, 16, kernel_size=5, stride=2, padding=2, output_padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(16, 8, kernel_size=5, stride=2, padding=2, output_padding=1),
+            nn.ReLU(),
+            # nn.ReLU(),
+            # nn.Sigmoid()
+        )
+
+        self.decoder_out = nn.Conv2d(8, 1, kernel_size=1, stride=1)
+
+        self.cell_list = []
+        self.decoder_cell_list = []
+
+        for i in range(self.num_layers):
+            self.cell_list.append(
+                SpatioTemporalLSTMCell(32, 32, mn, 5, 1, True)
+            )
+            if i == 0:
+              self.decoder_cell_list.append(
+                  SpatioTemporalLSTMCell(16, 32, mn, 5, 1, True)
+              )
+            else:
+              self.decoder_cell_list.append(
+                  SpatioTemporalLSTMCell(32, 32, mn, 5, 1, True)
+              )
+
+        self.cell_list = nn.ModuleList(self.cell_list)
+        self.decoder_cell_list = nn.ModuleList(self.decoder_cell_list)
+        self.unet = AttU_Net(1,1)
+        self.fusion = nn.Conv2d(2, 1, kernel_size=5, stride=1, padding=2)
+
+
+    def forward(self, obs):
+        batch_size = obs.shape[0]
+
+        h_t = []
+        c_t = []
+
+        for i in range(self.num_layers):
+            zeros = torch.zeros([batch_size, self.num_hidden[i], self.mn, self.mn]).to(torch.device("cuda"))
+            h_t.append(zeros)
+            c_t.append(zeros)
+
+
+        memory = torch.zeros([batch_size, self.num_hidden[0], self.mn, self.mn]).to(torch.device("cuda"))
+
+
+
+        for t in range(self.obs_tra_frames):
+            obs_encoder = self.obs_encoder_module(obs[:,t])
+            h_t[0], c_t[0], memory = self.cell_list[0](obs_encoder, h_t[0], c_t[0], memory)
+
+            for i in range(1, self.num_layers):
+                h_t[i], c_t[i], memory = self.cell_list[i](h_t[i - 1], h_t[i], c_t[i], memory)
+
+            # h, c = self.encoder_ConvLSTM(obs_encoder, h_t[self.num_layers-1], c_t[self.num_layers-1])
+        for i in range(self.num_layers):
+            h_t[i] = self.encoder_h[i](h_t[i])
+            c_t[i] = self.encoder_c[i](c_t[i])
+            
+        out_list = []
+        out_list_radar = []
+        last_frame = obs[:, -1, 0:1, :, :]
+        
+        for t in range(self.future_frames):
+            x = self.decoder_1(last_frame)
+            h_t[0], c_t[0], memory = self.decoder_cell_list[0](x, h_t[0], c_t[0], memory)
+            for i in range(1, self.num_layers):
+                h_t[i], c_t[i], memory = self.decoder_cell_list[i](h_t[i - 1], h_t[i], c_t[i], memory)
+            x =  self.decoder_2(h_t[self.num_layers - 1])
+            radar_x = x[:,0:1,:,:] # pick the first channel as radar
+            out_list_radar.append(radar_x[:,:,:-1,:-1])
+            radar_x = self.unet(radar_x)
+            x = self.decoder_out(x)
+            x = self.fusion(torch.cat([x, radar_x], dim=1))
+
+            x = x[:,:,:-1,:-1]
+
+            
+
+            out_list.append(x)
+            last_frame = F.sigmoid(x)
+
+        # print(pre_frames.shape)
+        return torch.cat(out_list, dim=1).unsqueeze(2), torch.cat(out_list_radar, dim=1).unsqueeze(2)
+
+
+
+class Mjolnir_04(nn.Module):
+    """
+    Mjolnir_04 is Mjolnir_02 with less parameters
+    """
+    def __init__(self, obs_tra_frames, obs_channels):
+        super(Mjolnir_04, self).__init__()
+        self.obs_tra_frames = obs_tra_frames
+        self.future_frames = 6
+        self.obs_channels = obs_channels
+        self.num_layers = 2
+        mn = 40
+        self.mn = mn
+        self.num_hidden = [64, 64, 64, 64]
+        self.obs_encoder_module = nn.Sequential(
+            nn.Conv2d(obs_channels, 32, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
+            nn.Conv2d(32, 32, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(32, 64, kernel_size=5, stride=1, padding=2),
+            nn.LayerNorm([64, mn, mn], elementwise_affine=True)
+        )
+        
+        self.encoder_h = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(64, 64, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            nn.Sequential(
+                nn.Conv2d(64, 64, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+        ])
+        self.encoder_c = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(64, 64, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            nn.Sequential(
+                nn.Conv2d(64, 64, kernel_size=1, stride=1),
+                nn.ReLU(),
+            ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+            # nn.Sequential(
+            #     nn.Conv2d(64, 64, kernel_size=1, stride=1).to(torch.device("cuda")),
+            #     nn.ReLU(),
+            # ),
+        ])
+
+        # self.decoder_ConvLSTM = ConvLSTM2D(8, 8, kernel_size=5, img_rowcol=mn)
+
+        self.decoder_1 = nn.Sequential(
+            nn.Conv2d(1, 8, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
+            nn.Conv2d(8, 8, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(8, 16, kernel_size=5, stride=1, padding=2),
+            nn.LayerNorm([16, mn, mn], elementwise_affine=True)
+        )
+        # self.decoder_ConvLSTM = ConvLSTM2D(16, 64, kernel_size=5, img_rowcol=mn) # first on is the output channels channels of decoder_1 and second one is the hidden channels
+
+        self.decoder_2 = nn.Sequential(
+            nn.ConvTranspose2d(64, 64, kernel_size=5, stride=2, padding=2, output_padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 64, kernel_size=5, stride=2, padding=2, output_padding=1),
+            nn.ReLU(),
+            # nn.ReLU(),
+            # nn.Sigmoid()
+        )
+
+        self.decoder_out = nn.Conv2d(64, 1, kernel_size=1, stride=1)
+
+        self.cell_list = []
+        self.decoder_cell_list = []
+
+        for i in range(self.num_layers):
+            self.cell_list.append(
+                SpatioTemporalLSTMCell(64, 64, mn, 5, 1, True)
+            )
+            if i == 0:
+              self.decoder_cell_list.append(
+                  SpatioTemporalLSTMCell(16, 64, mn, 5, 1, True)
+              )
+            else:
+              self.decoder_cell_list.append(
+                  SpatioTemporalLSTMCell(64, 64, mn, 5, 1, True)
+              )
+
+        self.cell_list = nn.ModuleList(self.cell_list)
+        self.decoder_cell_list = nn.ModuleList(self.decoder_cell_list)
+        # self.unet = AttU_Net(1,1)
+        self.fusion = nn.Conv2d(2, 1, kernel_size=5, stride=1, padding=2)
+
+
+    def forward(self, obs):
+        batch_size = obs.shape[0]
+
+        h_t = []
+        c_t = []
+
+        for i in range(self.num_layers):
+            zeros = torch.zeros([batch_size, self.num_hidden[i], self.mn, self.mn]).to(torch.device("cuda"))
+            h_t.append(zeros)
+            c_t.append(zeros)
+
+
+        memory = torch.zeros([batch_size, self.num_hidden[0], self.mn, self.mn]).to(torch.device("cuda"))
+
+
+
+        for t in range(self.obs_tra_frames):
+            obs_encoder = self.obs_encoder_module(obs[:,t])
+            h_t[0], c_t[0], memory = self.cell_list[0](obs_encoder, h_t[0], c_t[0], memory)
+
+            for i in range(1, self.num_layers):
+                h_t[i], c_t[i], memory = self.cell_list[i](h_t[i - 1], h_t[i], c_t[i], memory)
+
+            # h, c = self.encoder_ConvLSTM(obs_encoder, h_t[self.num_layers-1], c_t[self.num_layers-1])
+        for i in range(self.num_layers):
+            h_t[i] = self.encoder_h[i](h_t[i])
+            c_t[i] = self.encoder_c[i](c_t[i])
+            
+        out_list = []
+        out_list_radar = []
+        last_frame = obs[:, -1, 0:1, :, :]
+        
+        for t in range(self.future_frames):
+            x = self.decoder_1(last_frame)
+            h_t[0], c_t[0], memory = self.decoder_cell_list[0](x, h_t[0], c_t[0], memory)
+            for i in range(1, self.num_layers):
+                h_t[i], c_t[i], memory = self.decoder_cell_list[i](h_t[i - 1], h_t[i], c_t[i], memory)
+            x =  self.decoder_2(h_t[self.num_layers - 1])
+            radar_x = x[:,0:1,:,:] # pick the first channel as radar
+            out_list_radar.append(radar_x[:,:,:-1,:-1])
+            # radar_x = self.unet(radar_x)
+            x = self.decoder_out(x)
+            x = self.fusion(torch.cat([x, radar_x], dim=1))
+
+            x = x[:,:,:-1,:-1]
+
+            
+
+            out_list.append(x)
+            last_frame = F.sigmoid(x)
+
+        # print(pre_frames.shape)
+        return torch.cat(out_list, dim=1).unsqueeze(2), torch.cat(out_list_radar, dim=1).unsqueeze(2)
+
+
+# model = Mjolnir_04(6, 8).to(torch.device("cuda"))
+# a,b = model(torch.rand(1, 6, 8, 159, 159).to(torch.device("cuda")))
+# print(a.shape, b.shape)
+# print(count_parameters(model))
+
+# model = Mjolnir_02(6, 8).to(torch.device("cuda"))
+# print(count_parameters(model))
