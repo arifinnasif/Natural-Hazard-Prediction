@@ -765,3 +765,16 @@ class Mjolnir_04(nn.Module):
 
 # model = Mjolnir_02(6, 8).to(torch.device("cuda"))
 # print(count_parameters(model))
+    
+class NewLoss(nn.Module):
+  def __init__(self):
+    super().__init__()
+    self.BCELoss = nn.BCELoss(reduction='none')
+
+  def forward(self, prediction, truth, transformed_ground_truth):
+    # as prediction is not sigmoided
+    prediction = torch.sigmoid(prediction)
+    weight = (1-transformed_ground_truth)*prediction + transformed_ground_truth*(1-prediction)
+    loss = self.BCELoss(prediction, truth)
+    loss = loss * weight
+    return torch.mean(loss)

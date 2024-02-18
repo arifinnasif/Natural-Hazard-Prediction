@@ -19,6 +19,7 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
         
         criterion1 = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(20))
         criterion2 = nn.MSELoss()
+        criterion3 = NewLoss()
         #criterion = nn.BCELoss()
     
 
@@ -38,24 +39,41 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
             print('Beginning train!')
         else:
             print('Resuming train!')
+
+
+        temporal_sigma = 1
+        spatial_sigma = 20
         
 
 
         while epoch < cfg.epochs:
+            temporal_sigma = temporal_sigma * 0.99
+            spatial_sigma = spatial_sigma * 0.99
             for i, (X, y, y_aux, idx) in enumerate(train_loader):
+
+                transformed_y = torch.zeros_like(y)
+                for j in range(y.shape[0]):
+                    temp = y[j, :, 0, :, :].reshape(6, 159, 159)
+                    temp = torch.from_numpy(gaussian_filter(temp.cpu().numpy(), sigma=[temporal_sigma, spatial_sigma, spatial_sigma]))
+                    for m in range(6):
+                        mx = torch.max(temp[m])
+                        if mx.item() != 0:
+                            temp[m] = temp[m] / mx
+                        transformed_y[j, :, 0, :, :] = temp
                 X = X.float().to(cfg.device)
                 y = y.float().to(cfg.device)
-                y_aux = y_aux.float().to(cfg.device)
+                # y_aux = y_aux.float().to(cfg.device)
+                transformed_y = transformed_y.float().to(cfg.device)
 
                 #predicted_frames = model(X).to(torch.device("cuda"))
-                predicted_frames, radar_frames = model(X)
+                predicted_frames = model(X)
 
 
                 # backward
                 optimizer.zero_grad()
             
                 loss = cfg.criterion1_weight*criterion1(torch.flatten(predicted_frames), torch.flatten(y)) \
-                        + cfg.criterion2_weight*criterion2(torch.flatten(radar_frames), torch.flatten(y_aux))
+                        + cfg.criterion3_weight*criterion3(torch.flatten(predicted_frames), torch.flatten(y), torch.flatten(transformed_y))
                 loss.backward()
 
                 # update weights
@@ -65,7 +83,8 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
                 print('TRAIN INFO: epoch:{} ({}/{}) loss:{:.5f}'.format(epoch, i+1, len(train_loader), loss.item()))
                 del X
                 del y
-                del y_aux
+                # del y_aux
+                del transformed_y
                 del predicted_frames
 
             

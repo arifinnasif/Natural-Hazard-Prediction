@@ -130,7 +130,7 @@ class Model_eval(object):
             X = X.float().to(cfg.device)
             y = y.float().to(cfg.device)
             # print("hi"+str(i))
-            predicted_frames, _ = model(X)
+            predicted_frames = model(X)
             # print(predicted_frames.shape)
 
             # output
@@ -140,7 +140,7 @@ class Model_eval(object):
             print(info)
             del X
             del y
-            del _
+            # del _
             del predicted_frames
         sumpod, sumfar, sumts, sumets = val_calparams_epoch.cal_epoch_sum()
         info = '`{}` VAL EPOCH INFO: epoch:{} \nsumPOD:{:.5f}  sumFAR:{:.5f}  sumTS:{:.5f}  sumETS:{:.5f}\n save model:{}\n'. \
