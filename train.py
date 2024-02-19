@@ -1,3 +1,4 @@
+import time
 from generator import *
 from score import *
 from model import *
@@ -9,6 +10,8 @@ import config as cfg
 
 def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR_epoch = -1, maxETS = -0.5, maxETS_epoch = -1):
     try:
+        with open('record.txt', 'a') as f:
+            f.write('Training started at: ' + str(datetime.datetime.now()) + '\n')
         train_loader = get_train_loader()
         val_loader = get_val_loader()
         test_loader = get_test_loader()
@@ -47,6 +50,7 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
 
 
         while epoch < cfg.epochs:
+            start_clock = time.time()
             temporal_sigma = temporal_sigma * 0.99
             spatial_sigma = spatial_sigma * 0.99
             for i, (X, y, y_aux, idx) in enumerate(train_loader):
@@ -93,10 +97,31 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
             # print(val_sumets, test_sumets)
 
             epoch += 1
+            stop_clock = time.time()
+
+            print('Time taken for epoch: ', stop_clock - start_clock, 'seconds')
+            estimated_finish_time = (cfg.epochs - epoch) * (stop_clock - start_clock) + datetime.datetime.now().timestamp()
+            print('Estimated finish time: ', datetime.datetime.fromtimestamp(estimated_finish_time))
+
+            with open('record.txt', 'a') as f:
+                f.write('Time taken for epoch: ' + str(stop_clock - start_clock) + 'seconds\n')
+                f.write('Estimated finish time: ' + str(datetime.datetime.fromtimestamp(estimated_finish_time)) + '\n')
 
     except Exception as e:
         print(e)
         del model
+    
+    finally:
+        del model
+        del train_loader
+        del val_loader
+        del test_loader
+        del model_eval_valdata
+        del model_eval_testdata
+        torch.cuda.empty_cache()
+
+        with open('record.txt', 'a') as f:
+            f.write('Training ended at: ' + str(datetime.datetime.now()) + '\n')
 
 
 parser = argparse.ArgumentParser(
