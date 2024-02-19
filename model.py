@@ -757,7 +757,107 @@ class Mjolnir_04(nn.Module):
         # print(pre_frames.shape)
         return torch.cat(out_list, dim=1).unsqueeze(2), torch.cat(out_list_radar, dim=1).unsqueeze(2)
 
+class ADSNet_O(nn.Module):
+    def __init__(self):
+        super(ADSNet_O, self).__init__()
+        self.num_frames_truth = 1
 
+        # Encoder
+        self.encoder_conv2d_1 = nn.Sequential(
+            nn.Conv2d(self.num_frames_truth, 4, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=2, padding=1)
+        ) # output shape: (batch_size, 4, 80, 80)
+
+        self.encoder_conv2d_2 = nn.Sequential(
+            nn.Conv2d(4, 4, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=2, padding=0)
+        ) # output shape: (batch_size, 8, 40, 40)
+
+        self.en_convlstm = ConvLSTMCell(4, 8, kernel_size=(5, 5))
+
+        self.en_de_h = nn.Sequential(
+            nn.Conv2d(8, 16, kernel_size=(1, 1), padding=0),
+            nn.ReLU()
+        )
+
+        self.en_de_c = nn.Sequential(
+            nn.Conv2d(8, 16, kernel_size=(1, 1), padding=0),
+            nn.ReLU()
+        )
+
+        # Decoder
+
+        self.decoder_conv2d_1 = nn.Sequential(
+            nn.Conv2d(1, 4, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=2, padding=1)
+        )
+
+        self.decoder_conv2d_2 = nn.Sequential(
+            nn.Conv2d(4, 4, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=2, padding=0)
+        )
+
+        self.de_convlstm = ConvLSTMCell(4, 16, kernel_size=(5, 5))
+
+        self.de_conv2dT_1 = nn.Sequential(
+            nn.ConvTranspose2d(16, 32, kernel_size=(5, 5), stride=(2, 2), padding=2, output_padding=1),
+            nn.ReLU()
+        ) # output shape: (batch_size, 32, 80, 80)
+
+        self.de_conv2dT_2 = nn.Sequential(
+            nn.ConvTranspose2d(32, 32, kernel_size=(5, 5), stride=(2, 2), padding=2, output_padding=1),
+            nn.ReLU()
+        ) # output shape: (batch_size, 32, 160, 160)
+
+        self.de_conv_out = nn.Conv2d(32, 1, kernel_size=(1, 1), padding=0)
+
+
+
+        
+
+    def forward(self, input_batch):
+        last_frame = input_batch[:, -1, :, :, :]
+
+        
+        # Encoder
+        for t in range(6):
+
+            x = self.encoder_conv2d_1(input_batch[:, t, :, :, :])
+            x = self.encoder_conv2d_2(x)
+            if t == 0:
+                h, c = self.en_convlstm(x, self.en_convlstm.init_hidden(x.shape[0], (x.shape[2], x.shape[3])))
+            else:
+                h, c = self.en_convlstm(x, (h, c))
+        
+        del x
+        del input_batch
+
+        # Encoder to Decoder
+        h = self.en_de_h(h)
+        c = self.en_de_c(c)
+
+        # decoder
+
+        out_list = []
+
+        for t in range(6):
+            x = self.decoder_conv2d_1(last_frame)
+            x = self.decoder_conv2d_2(x)
+            h, c = self.de_convlstm(x, (h, c))
+            x = self.de_conv2dT_1(c)
+            x = self.de_conv2dT_2(x)
+            x = self.de_conv_out(x)
+            x = x[:,:,:-1,:-1]
+            out_list.append(x)
+            last_frame = F.sigmoid(x)
+
+
+        return torch.cat(out_list, dim=1).unsqueeze(2)
+   
 # model = Mjolnir_04(6, 8).to(torch.device("cuda"))
 # a,b = model(torch.rand(1, 6, 8, 159, 159).to(torch.device("cuda")))
 # print(a.shape, b.shape)
