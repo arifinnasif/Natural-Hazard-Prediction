@@ -758,7 +758,7 @@ class Mjolnir_04(nn.Module):
         return torch.cat(out_list, dim=1).unsqueeze(2), torch.cat(out_list_radar, dim=1).unsqueeze(2)
 
 class ADSNet_O(nn.Module):
-    def __init__(self):
+    def __init__(self, obs_tra_frames, obs_channels):
         super(ADSNet_O, self).__init__()
         self.num_frames_truth = 1
 
@@ -775,7 +775,7 @@ class ADSNet_O(nn.Module):
             nn.MaxPool2d(kernel_size=(2, 2), stride=2, padding=0)
         ) # output shape: (batch_size, 8, 40, 40)
 
-        self.en_convlstm = ConvLSTMCell(4, 8, kernel_size=(5, 5))
+        self.en_convlstm = ConvLSTM2D(4, 8, kernel_size=5, img_rowcol=40)
 
         self.en_de_h = nn.Sequential(
             nn.Conv2d(8, 16, kernel_size=(1, 1), padding=0),
@@ -801,7 +801,8 @@ class ADSNet_O(nn.Module):
             nn.MaxPool2d(kernel_size=(2, 2), stride=2, padding=0)
         )
 
-        self.de_convlstm = ConvLSTMCell(4, 16, kernel_size=(5, 5))
+        # self.de_convlstm = ConvLSTMCell(4, 16, kernel_size=(5, 5))
+        self.de_convlstm = ConvLSTM2D(4, 16, kernel_size=5, img_rowcol=40)
 
         self.de_conv2dT_1 = nn.Sequential(
             nn.ConvTranspose2d(16, 32, kernel_size=(5, 5), stride=(2, 2), padding=2, output_padding=1),
