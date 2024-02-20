@@ -110,9 +110,9 @@ class Model_eval(object):
         self.minFAR_epoch = minFAR_epoch
         self.maxETS = maxETS
         self.maxETS_epoch = maxETS_epoch
-        if self.is_save_model:
-            with open(os.path.join('record.txt'), 'a') as f:
-                f.write(str(datetime.datetime.now()) + '\r\n')
+        # if self.is_save_model:
+        #     with open(os.path.join('record.txt'), 'a') as f:
+        #         f.write(str(datetime.datetime.now()) + '\r\n')
                 # f.write(str(config_dict) + '\r\n')
 
     def __del__(self):

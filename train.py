@@ -11,7 +11,9 @@ import config as cfg
 def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR_epoch = -1, maxETS = -0.5, maxETS_epoch = -1):
     try:
         with open('record.txt', 'a') as f:
-            f.write('Training started at: ' + str(datetime.datetime.now()) + '\n')
+            f.write('Training started at: ' + str(datetime.datetime.now()) + '\n\n')
+            # write config
+            f.write(str(cfg.__dict__) + '\n\n')
         train_loader = get_train_loader()
         val_loader = get_val_loader()
         test_loader = get_test_loader()
@@ -105,7 +107,7 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
 
             with open('record.txt', 'a') as f:
                 f.write('Time taken for epoch: ' + str(stop_clock - start_clock) + 'seconds\n')
-                f.write('Estimated finish time: ' + str(datetime.datetime.fromtimestamp(estimated_finish_time)) + '\n')
+                f.write('Estimated finish time: ' + str(datetime.datetime.fromtimestamp(estimated_finish_time)) + '\n\n')
 
     except Exception as e:
         print(e)
@@ -121,7 +123,7 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
         torch.cuda.empty_cache()
 
         with open('record.txt', 'a') as f:
-            f.write('Training ended at: ' + str(datetime.datetime.now()) + '\n')
+            f.write('Training ended at: ' + str(datetime.datetime.now()) + '\n\n')
 
 
 parser = argparse.ArgumentParser(
