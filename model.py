@@ -823,6 +823,7 @@ class ADSNet_O(nn.Module):
     def forward(self, input_batch):
         input_batch = input_batch[:,:,0:self.num_frames_truth,:,:]
         last_frame = input_batch[:, -1, :, :, :]
+        batch_size = input_batch.shape[0]
 
         
         # Encoder
@@ -831,7 +832,7 @@ class ADSNet_O(nn.Module):
             x = self.encoder_conv2d_1(input_batch[:, t, :, :, :])
             x = self.encoder_conv2d_2(x)
             if t == 0:
-                h, c = self.en_convlstm(x, self.en_convlstm.init_hidden(x.shape[0], (x.shape[2], x.shape[3])))
+                h, c = torch.zeros([batch_size, 8, 40, 40], dtype=torch.float32).to(input_batch.device), torch.zeros([batch_size, 8, 40, 40], dtype=torch.float32).to(input_batch.device)
             else:
                 h, c = self.en_convlstm(x, (h, c))
         
