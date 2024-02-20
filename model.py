@@ -834,7 +834,7 @@ class ADSNet_O(nn.Module):
             if t == 0:
                 h, c = torch.zeros([batch_size, 8, 40, 40], dtype=torch.float32).to(input_batch.device), torch.zeros([batch_size, 8, 40, 40], dtype=torch.float32).to(input_batch.device)
             else:
-                h, c = self.en_convlstm(x, (h, c))
+                h, c = self.en_convlstm(x, h, c)
         
         del x
         del input_batch
@@ -850,7 +850,7 @@ class ADSNet_O(nn.Module):
         for t in range(6):
             x = self.decoder_conv2d_1(last_frame)
             x = self.decoder_conv2d_2(x)
-            h, c = self.de_convlstm(x, (h, c))
+            h, c = self.de_convlstm(x, h, c)
             x = self.de_conv2dT_1(c)
             x = self.de_conv2dT_2(x)
             x = self.de_conv_out(x)
