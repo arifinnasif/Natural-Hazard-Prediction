@@ -760,7 +760,7 @@ class Mjolnir_04(nn.Module):
 class ADSNet_O(nn.Module):
     def __init__(self, obs_tra_frames, obs_channels):
         super(ADSNet_O, self).__init__()
-        self.num_frames_truth = 1
+        self.num_frames_truth = obs_channels
 
         # Encoder
         self.encoder_conv2d_1 = nn.Sequential(
@@ -821,6 +821,7 @@ class ADSNet_O(nn.Module):
         
 
     def forward(self, input_batch):
+        input_batch = input_batch[:,:,0:self.num_frames_truth,:,:]
         last_frame = input_batch[:, -1, :, :, :]
 
         
