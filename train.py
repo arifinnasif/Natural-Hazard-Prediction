@@ -57,15 +57,7 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
             spatial_sigma = spatial_sigma * 0.99
             for i, (X, y, y_aux, idx) in enumerate(train_loader):
 
-                transformed_y = torch.zeros_like(y)
-                for j in range(y.shape[0]):
-                    temp = y[j, :, 0, :, :].reshape(6, 159, 159)
-                    temp = torch.from_numpy(gaussian_filter(temp.cpu().numpy(), sigma=[temporal_sigma, spatial_sigma, spatial_sigma]))
-                    for m in range(6):
-                        mx = torch.max(temp[m])
-                        if mx.item() != 0:
-                            temp[m] = temp[m] / mx
-                        transformed_y[j, :, 0, :, :] = temp
+                transformed_y = make_blur(y, temporal_sigma, spatial_sigma)
                 X = X.float().to(cfg.device)
                 y = y.float().to(cfg.device)
                 # y_aux = y_aux.float().to(cfg.device)
@@ -125,6 +117,24 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
         with open('record.txt', 'a') as f:
             f.write('Training ended at: ' + str(datetime.datetime.now()) + '\n\n')
 
+def make_blur(y, temporal_sigma, spatial_sigma):
+    transformed_y = gaussian_filter(y[:, :, 0, :, :].cpu().numpy(), sigma=[0, temporal_sigma, spatial_sigma, spatial_sigma])
+    max_values = np.max(transformed_y, axis=(2,3))
+    zero_mask = max_values == 0
+
+    # Replace zeros with 1 to avoid division by zero
+    max_values[zero_mask] = 1
+
+    # Expand dimensions of max_values for broadcasting
+    max_values = max_values[:, :, np.newaxis, np.newaxis]
+
+    # Perform division
+    transformed_y = np.divide(transformed_y, max_values, where=~zero_mask[:, :, np.newaxis, np.newaxis])
+
+    #transformed_y_2 = transformed_y_2 / np.max(transformed_y_2, axis=(2, 3), keepdims=True)
+    transformed_y = transformed_y.reshape(y.shape[0], 6, 1, 159, 159)
+    transformed_y = torch.from_numpy(transformed_y)
+    return transformed_y
 
 parser = argparse.ArgumentParser(
                     prog='Mjolnir',
