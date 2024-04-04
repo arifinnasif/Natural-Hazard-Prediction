@@ -22,8 +22,7 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
 
         # loss function
         
-        # criterion1 = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(20))
-        criterion1 = nn.MSELoss()
+        criterion1 = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(20))
         criterion2 = nn.MSELoss()
         criterion3 = NewLoss()
         #criterion = nn.BCELoss()
@@ -90,8 +89,8 @@ def train(model, epoch=0, maxPOD = -0.5, maxPOD_epoch = -1, minFAR = 1.1, minFAR
                 del predicted_frames
 
             
-            model_eval_valdata.eval(val_loader, model, epoch, cfg.do_sigmoid_after_model_prediction)
-            model_eval_testdata.eval(test_loader, model, epoch, cfg.do_sigmoid_after_model_prediction)
+            model_eval_valdata.eval(val_loader, model, epoch)
+            model_eval_testdata.eval(test_loader, model, epoch)
             # print(val_sumets, test_sumets)
 
             epoch += 1

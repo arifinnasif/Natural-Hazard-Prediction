@@ -1,12 +1,11 @@
 import torch
-import model
+# import model
 
 grid_size = 159
 prev_hours = 6
 future_hours = 6
-train_model_class = model.LinearRegressionModel
-test_model_class = model.LinearRegressionModel
-do_sigmoid_after_model_prediction = False
+# train_model_class = model.Mjolnir_08_03
+# test_model_class = model.Mjolnir_08_03
 batch_size = 64
 epochs = 200
 learning_rate = 0.0001
@@ -17,8 +16,7 @@ criterion2_weight = 1
 criterion3_weight = 1
 
 
-
-list_of_params = [0,1,2,3,4,5,6,7]
+list_of_params = [0, 1, 2, 3, 4, 5, 6, 7]
 input_channels = len(list_of_params)
 
 def ablation(model, input_batch):
